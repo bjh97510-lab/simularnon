@@ -715,6 +715,14 @@
   }
 
   /* ---------------- 이벤트 ---------------- */
+  $("#reset-btn").addEventListener("click", () => {
+    if (!confirm("지금까지의 풀이 기록, 도토리, 칭찬도장이 모두 지워지고 처음부터 시작합니다.\n기록을 초기화할까요?")) return;
+    closeModal();
+    startSession();
+    showApp();
+    toast("학습 기록을 초기화했어요. 처음부터 다시 시작합니다!");
+  });
+
   document.addEventListener("click", (e) => {
     if (e.target.id === "modal") return closeModal(); // 배경 클릭
     const t = e.target.closest("button");

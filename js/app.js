@@ -1,7 +1,6 @@
 /* =========================================================
  *  중2 닮음 & 피타고라스 학습 앱
  *  - 세션(SessionStorage) 기반: 새로고침/종료 시 학습 기록 초기화
- *  - 구글 시트(Apps Script Web App)로 학습 결과 전송
  * ========================================================= */
 (function () {
   "use strict";
@@ -26,8 +25,6 @@
 
   function startSession() {
     state = {
-      sessionId: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
-      startedAt: new Date().toISOString(),
       answers: {},   // { [questionId]: { given, correct } }
       selected: {},  // 객관식 임시 선택
       acorns: 0,       // 현재 보유 도토리 (10개가 되면 칭찬도장으로 변환)
@@ -35,8 +32,7 @@
       acornsEarned: 0, // 누적 획득 도토리
       seen: {},        // 개념 카드 열람 단원
       flipped: {},     // 뒤집어 본 플래시카드
-      labsDone: {},    // 실험실 미션 완료 단원
-      submitted: null
+      labsDone: {}     // 실험실 미션 완료 단원
     };
     saveState();
   }
@@ -44,19 +40,6 @@
   /* ---------------- 유틸 ---------------- */
   function esc(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  }
-
-  function formatDateTime(iso) {
-    const d = new Date(iso);
-    const p = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-  }
-
-  function formatDuration(sec) {
-    const h = Math.floor(sec / 3600);
-    const m = Math.floor((sec % 3600) / 60);
-    const s = sec % 60;
-    return (h ? `${h}시간 ` : "") + `${m}분 ${s}초`;
   }
 
   function renderMath(root) {
@@ -257,7 +240,6 @@
     else if (view.name === "report") main.innerHTML = renderReport();
     renderMath(main);
     if (view.name === "unit" && view.tab === "lab") mountLab(UNITS.find((x) => x.id === view.unitId));
-    if (view.name === "report") showSheetStatus();
   }
 
   /* ---------------- 대시보드 ---------------- */
@@ -690,7 +672,6 @@
   /* ---------------- 최종 리포트 ---------------- */
   function renderReport() {
     const o = overallStats();
-    const elapsed = Math.round((Date.now() - new Date(state.startedAt).getTime()) / 1000);
     const R = 60, C = 2 * Math.PI * R;
     const rows = UNITS.map((u) => {
       const s = unitStats(u);
@@ -703,170 +684,34 @@
       </tr>`;
     }).join("");
 
-    const sub = state.submitted;
-    let notice = "";
-    if (sub) notice = `<div class="notice ok">✅ ${formatDateTime(sub.at)}에 학습 결과를 제출했습니다.${sub.demo ? " (데모 모드: 실제 전송 없음)" : sub.confirmed ? " (시트 저장 확인됨)" : ""}</div>`;
-    if (o.answered < o.total && !sub) notice += `<div class="notice info">아직 풀지 않은 문제가 ${o.total - o.answered}개 있습니다. 제출하면 현재까지의 결과가 전송됩니다.</div>`;
-
     return `
       <div class="crumb"><button data-nav="home" type="button">대시보드</button> › 최종 리포트</div>
       <div class="page-head">
         <div><h2>최종 학습 리포트</h2></div>
       </div>
-      <div class="report-grid">
-        <div class="panel">
-          <div class="score-ring">
-            <div class="ring">
-              <svg width="140" height="140" viewBox="0 0 140 140">
-                <circle cx="70" cy="70" r="${R}" fill="none" stroke="#e8edf5" stroke-width="14"/>
-                <circle cx="70" cy="70" r="${R}" fill="none" stroke="var(--primary)" stroke-width="14"
-                  stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - o.score / 100)}" />
-              </svg>
-              <div class="center"><div><b>${o.score}</b><span>/ 100점</span></div></div>
-            </div>
-            <div class="stats" style="grid-template-columns:repeat(3,1fr);margin:0;flex:1">
-              <div class="stat" style="padding:0"><div class="label">풀이한 문제</div><div class="value">${o.answered}<small>/${o.total}</small></div></div>
-              <div class="stat" style="padding:0"><div class="label">맞힌 개수</div><div class="value" style="color:var(--ok)">${o.correct}</div></div>
-              <div class="stat" style="padding:0"><div class="label">틀린 개수</div><div class="value" style="color:var(--bad)">${o.answered - o.correct}</div></div>
-            </div>
+      <div class="panel">
+        <div class="score-ring">
+          <div class="ring">
+            <svg width="140" height="140" viewBox="0 0 140 140">
+              <circle cx="70" cy="70" r="${R}" fill="none" stroke="#e8edf5" stroke-width="14"/>
+              <circle cx="70" cy="70" r="${R}" fill="none" stroke="var(--primary)" stroke-width="14"
+                stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - o.score / 100)}" />
+            </svg>
+            <div class="center"><div><b>${o.score}</b><span>/ 100점</span></div></div>
           </div>
-          <div class="report-table">
-            <table class="grid">
-              <tr><th>단원</th><th>풀이</th><th>정답</th><th>점수</th><th>성취도</th></tr>
-              ${rows}
-            </table>
+          <div class="stats" style="grid-template-columns:repeat(3,1fr);margin:0;flex:1">
+            <div class="stat" style="padding:0"><div class="label">풀이한 문제</div><div class="value">${o.answered}<small>/${o.total}</small></div></div>
+            <div class="stat" style="padding:0"><div class="label">맞힌 개수</div><div class="value" style="color:var(--ok)">${o.correct}</div></div>
+            <div class="stat" style="padding:0"><div class="label">틀린 개수</div><div class="value" style="color:var(--bad)">${o.answered - o.correct}</div></div>
           </div>
         </div>
-        <aside class="panel submit-panel">
-          <h3>구글 시트로 결과 제출</h3>
-          <p>단원별 점수, 총점, 학습 시간이 선생님의 구글 시트로 전송됩니다.</p>
-          <div id="sheet-status" class="sheet-status wait">⏳ 구글 시트 연결 확인 중...</div>
-          <dl class="kv">
-            <dt>시작 시각</dt><dd>${formatDateTime(state.startedAt)}</dd>
-            <dt>학습 시간</dt><dd>${formatDuration(elapsed)}</dd>
-            <dt>총점</dt><dd>${o.score}점 (${o.correct}/${o.total})</dd>
-            <dt>개념 활동</dt><dd>⭕ OX ${oxStats().correct}/${oxStats().total} · 🧪 실험실 미션 ${labCount()}/${UNITS.length}</dd>
-            <dt>보상</dt><dd>🏅 칭찬도장 ${state.stamps}개 · 🌰 도토리 ${state.acorns}개 (누적 ${state.acornsEarned}개)</dd>
-          </dl>
-          <button type="button" class="btn btn-primary btn-block" id="send-result">📤 구글 시트로 학습 결과 제출</button>
-          <div id="send-notice">${notice}</div>
-        </aside>
+        <div class="report-table">
+          <table class="grid">
+            <tr><th>단원</th><th>풀이</th><th>정답</th><th>점수</th><th>성취도</th></tr>
+            ${rows}
+          </table>
+        </div>
       </div>`;
-  }
-
-  /* ---------------- 구글 시트 연동 ---------------- */
-  const sheetUrl = () => ((window.APP_CONFIG && window.APP_CONFIG.SHEET_WEBAPP_URL) || "").trim();
-
-  // Apps Script 웹 앱은 CORS 헤더를 주지 않아 fetch로는 응답을 읽을 수 없음
-  // → <script> 태그(JSONP)로 요청해 { ok: true } 응답까지 확인
-  function jsonp(params, timeoutMs = 10000) {
-    return new Promise((resolve, reject) => {
-      const cb = `__sheetCb_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-      const qs = new URLSearchParams({ ...params, callback: cb });
-      const url = sheetUrl();
-      const s = document.createElement("script");
-      const cleanup = () => { clearTimeout(timer); delete window[cb]; s.remove(); };
-      const timer = setTimeout(() => { cleanup(); reject(new Error("timeout")); }, timeoutMs);
-      window[cb] = (res) => { cleanup(); resolve(res); };
-      s.onerror = () => { cleanup(); reject(new Error("network")); };
-      s.src = `${url}${url.includes("?") ? "&" : "?"}${qs}`;
-      document.head.appendChild(s);
-    });
-  }
-
-  // 결과: { demo } | { confirmed: true } | { confirmed: false } (전송은 했지만 응답 확인 불가)
-  async function postToSheet(payload) {
-    if (!sheetUrl()) return { demo: true };
-    try {
-      const res = await jsonp({ payload: JSON.stringify(payload) });
-      if (!res || !res.ok) throw new Error((res && res.error) || "sheet error");
-      return { confirmed: true };
-    } catch (err) {
-      if (err.message !== "timeout" && err.message !== "network") throw err; // 시트가 오류를 돌려준 경우
-      // 예전 버전 스크립트 등으로 응답을 못 받은 경우: POST로 한 번 더 보내기 (응답은 읽을 수 없음)
-      await fetch(sheetUrl(), {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify(payload)
-      });
-      return { confirmed: false };
-    }
-  }
-
-  // 리포트 화면의 연결 상태 표시 (세션 동안 한 번만 확인)
-  let sheetStatus = null;
-  async function showSheetStatus() {
-    const el = $("#sheet-status");
-    if (!el) return;
-    const paintStatus = (s) => {
-      const box = $("#sheet-status");
-      if (!box) return;
-      box.className = `sheet-status ${s.cls}`;
-      box.innerHTML = s.html;
-    };
-    if (!sheetUrl()) return paintStatus({ cls: "off", html: "⚪ 데모 모드 — 구글 시트 주소가 설정되지 않았어요" });
-    if (sheetStatus) return paintStatus(sheetStatus);
-    paintStatus({ cls: "wait", html: "⏳ 구글 시트 연결 확인 중..." });
-    try {
-      const res = await jsonp({ action: "ping" }, 8000);
-      sheetStatus = res && res.ok
-        ? { cls: "on", html: `🟢 구글 시트 연결됨${res.spreadsheet ? ` · <b>${esc(res.spreadsheet)}</b>` : ""}` }
-        : { cls: "err", html: "🔴 구글 시트가 오류를 돌려줬어요. 선생님께 알려 주세요." };
-    } catch {
-      sheetStatus = { cls: "err", html: "🟠 구글 시트 응답을 확인하지 못했어요. 제출은 시도할 수 있어요." };
-    }
-    paintStatus(sheetStatus);
-  }
-
-  async function sendResult(btn) {
-    const o = overallStats();
-    const now = new Date();
-    const durationSec = Math.round((now.getTime() - new Date(state.startedAt).getTime()) / 1000);
-    const payload = {
-      type: "result",
-      sessionId: state.sessionId,
-      startedAt: formatDateTime(state.startedAt),
-      completedAt: formatDateTime(now.toISOString()),
-      durationSec,
-      duration: formatDuration(durationSec),
-      totalQuestions: o.total,
-      answered: o.answered,
-      correct: o.correct,
-      totalScore: o.score,
-      stamps: state.stamps,
-      acorns: state.acorns,
-      acornsEarned: state.acornsEarned,
-      oxCorrect: oxStats().correct,
-      oxTotal: oxStats().total,
-      labsDone: labCount(),
-      units: UNITS.map((u) => {
-        const s = unitStats(u);
-        return { id: u.id, title: u.title, total: s.total, answered: s.answered, correct: s.correct, score: s.score };
-      })
-    };
-
-    btn.disabled = true;
-    btn.textContent = "전송 중...";
-    const box = $("#send-notice");
-    try {
-      const res = await postToSheet(payload);
-      state.submitted = { at: now.toISOString(), demo: !!res.demo, confirmed: !!res.confirmed };
-      saveState();
-      box.innerHTML = res.demo
-        ? `<div class="notice ok">✅ 제출 완료! 수고했어요.<br/>(데모 모드: config.js에 구글 시트 주소를 넣으면 실제로 저장됩니다)</div>`
-        : res.confirmed
-          ? `<div class="notice ok">✅ 학습 결과가 <b>구글 시트에 저장되었습니다!</b> 수고했어요.</div>`
-          : `<div class="notice info">📤 학습 결과를 보냈어요. 다만 시트의 저장 확인 응답을 받지 못했으니, 선생님께 기록되었는지 확인해 주세요.</div>`;
-      toast(res.confirmed ? "구글 시트 저장 완료!" : "학습 결과 제출 완료!");
-      btn.textContent = "📤 다시 제출하기";
-    } catch (err) {
-      console.error(err);
-      box.innerHTML = `<div class="notice bad">❌ 전송에 실패했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.<br/><small>${esc(err.message)}</small></div>`;
-      btn.textContent = "📤 구글 시트로 학습 결과 제출";
-    } finally {
-      btn.disabled = false;
-    }
   }
 
   /* ---------------- 이벤트 ---------------- */
@@ -902,7 +747,6 @@
       return;
     }
     if (t.dataset.submit) return submitAnswer(t.dataset.submit);
-    if (t.id === "send-result") return sendResult(t);
   });
 
   document.addEventListener("keydown", (e) => {

@@ -1,7 +1,7 @@
 /* =========================================================
  *  중2 닮음 & 피타고라스 학습 앱
- *  - 세션(SessionStorage) 기반: 새로고침/종료/로그아웃 시 학습 기록 초기화
- *  - 구글 시트(Apps Script Web App)로 로그인 정보 및 학습 결과 전송
+ *  - 세션(SessionStorage) 기반: 새로고침/종료 시 학습 기록 초기화
+ *  - 구글 시트(Apps Script Web App)로 학습 결과 전송
  * ========================================================= */
 (function () {
   "use strict";
@@ -24,12 +24,10 @@
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(state));
   }
 
-  function startSession(school, student) {
+  function startSession() {
     state = {
       sessionId: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
-      school,
-      student,
-      loginAt: new Date().toISOString(),
+      startedAt: new Date().toISOString(),
       answers: {},   // { [questionId]: { given, correct } }
       selected: {},  // 객관식 임시 선택
       acorns: 0,       // 현재 보유 도토리 (10개가 되면 칭찬도장으로 변환)
@@ -41,11 +39,6 @@
       submitted: null
     };
     saveState();
-  }
-
-  function endSession() {
-    state = null;
-    sessionStorage.removeItem(SESSION_KEY);
   }
 
   /* ---------------- 유틸 ---------------- */
@@ -238,18 +231,7 @@
   }
 
   /* ---------------- 화면 전환 ---------------- */
-  function showLogin() {
-    $("#app-view").hidden = true;
-    $("#login-view").hidden = false;
-    $("#login-form").reset();
-    $("#school").focus();
-  }
-
   function showApp() {
-    $("#login-view").hidden = true;
-    $("#app-view").hidden = false;
-    $("#user-info").innerHTML = `<b>${esc(state.school)}</b> / ${esc(state.student)}`;
-    $("#user-info").title = `${state.school} / ${state.student}`;
     updateRewardBar();
     navigate({ name: "home" });
   }
@@ -708,7 +690,7 @@
   /* ---------------- 최종 리포트 ---------------- */
   function renderReport() {
     const o = overallStats();
-    const elapsed = Math.round((Date.now() - new Date(state.loginAt).getTime()) / 1000);
+    const elapsed = Math.round((Date.now() - new Date(state.startedAt).getTime()) / 1000);
     const R = 60, C = 2 * Math.PI * R;
     const rows = UNITS.map((u) => {
       const s = unitStats(u);
@@ -729,7 +711,7 @@
     return `
       <div class="crumb"><button data-nav="home" type="button">대시보드</button> › 최종 리포트</div>
       <div class="page-head">
-        <div><h2>최종 학습 리포트</h2><p>${esc(state.school)} · ${esc(state.student)}</p></div>
+        <div><h2>최종 학습 리포트</h2></div>
       </div>
       <div class="report-grid">
         <div class="panel">
@@ -760,9 +742,7 @@
           <p>단원별 점수, 총점, 학습 시간이 선생님의 구글 시트로 전송됩니다.</p>
           <div id="sheet-status" class="sheet-status wait">⏳ 구글 시트 연결 확인 중...</div>
           <dl class="kv">
-            <dt>학교</dt><dd>${esc(state.school)}</dd>
-            <dt>학번/이름</dt><dd>${esc(state.student)}</dd>
-            <dt>로그인 시각</dt><dd>${formatDateTime(state.loginAt)}</dd>
+            <dt>시작 시각</dt><dd>${formatDateTime(state.startedAt)}</dd>
             <dt>학습 시간</dt><dd>${formatDuration(elapsed)}</dd>
             <dt>총점</dt><dd>${o.score}점 (${o.correct}/${o.total})</dd>
             <dt>개념 활동</dt><dd>⭕ OX ${oxStats().correct}/${oxStats().total} · 🧪 실험실 미션 ${labCount()}/${UNITS.length}</dd>
@@ -839,26 +819,14 @@
     paintStatus(sheetStatus);
   }
 
-  function sendLogin() {
-    postToSheet({
-      type: "login",
-      sessionId: state.sessionId,
-      school: state.school,
-      student: state.student,
-      loginAt: formatDateTime(state.loginAt)
-    }).catch((err) => console.warn("로그인 정보 전송 실패:", err));
-  }
-
   async function sendResult(btn) {
     const o = overallStats();
     const now = new Date();
-    const durationSec = Math.round((now.getTime() - new Date(state.loginAt).getTime()) / 1000);
+    const durationSec = Math.round((now.getTime() - new Date(state.startedAt).getTime()) / 1000);
     const payload = {
       type: "result",
       sessionId: state.sessionId,
-      school: state.school,
-      student: state.student,
-      loginAt: formatDateTime(state.loginAt),
+      startedAt: formatDateTime(state.startedAt),
       completedAt: formatDateTime(now.toISOString()),
       durationSec,
       duration: formatDuration(durationSec),
@@ -902,24 +870,6 @@
   }
 
   /* ---------------- 이벤트 ---------------- */
-  $("#login-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const school = $("#school").value.trim();
-    const student = $("#student").value.trim();
-    if (!school || !student) { toast("학교 이름과 학번(또는 이름)을 모두 입력해 주세요."); return; }
-    startSession(school, student);
-    sendLogin();
-    showApp();
-    toast(`${student} 학생, 환영합니다!`);
-  });
-
-  $("#logout-btn").addEventListener("click", () => {
-    if (!confirm("로그아웃하면 지금까지의 학습 기록이 모두 초기화됩니다.\n로그아웃할까요?")) return;
-    endSession();
-    closeModal();
-    showLogin();
-  });
-
   document.addEventListener("click", (e) => {
     if (e.target.id === "modal") return closeModal(); // 배경 클릭
     const t = e.target.closest("button");
@@ -970,5 +920,6 @@
   // KaTeX가 늦게 로드된 경우 다시 렌더링
   window.addEventListener("load", () => { if (state) renderMath($("#main")); });
 
-  showLogin();
+  startSession();
+  showApp();
 })();

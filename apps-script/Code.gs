@@ -11,12 +11,10 @@
  * (POST 방식도 계속 지원)
  */
 
-const LOGIN_SHEET = "로그인기록";
 const RESULT_SHEET = "학습결과";
 
-const LOGIN_HEADERS = ["수신시각", "세션ID", "학교", "학번/이름", "로그인시각"];
 const RESULT_HEADERS = [
-  "수신시각", "세션ID", "학교", "학번/이름", "로그인시각", "완료시각", "학습시간", "학습시간(초)",
+  "수신시각", "세션ID", "시작시각", "완료시각", "학습시간", "학습시간(초)",
   "전체문항", "풀이문항", "정답수", "총점",
   "1.닮음과 성질", "2.닮음 조건", "3.평행선&무게중심", "4.넓이·부피의 비", "5.피타고라스 정리",
   "칭찬도장", "보유 도토리", "누적 도토리", "OX 정답", "실험실 미션"
@@ -24,7 +22,6 @@ const RESULT_HEADERS = [
 
 /** 처음 한 번 직접 실행: 탭/머리글 생성 + 권한 승인 */
 function setup() {
-  getSheet_(LOGIN_SHEET, LOGIN_HEADERS);
   getSheet_(RESULT_SHEET, RESULT_HEADERS);
   Logger.log("준비 완료! 이제 [배포 → 새 배포 → 웹 앱]으로 배포하세요.");
 }
@@ -57,16 +54,12 @@ function handle_(raw) {
     const data = JSON.parse(raw);
     const now = new Date();
 
-    if (data.type === "login") {
-      getSheet_(LOGIN_SHEET, LOGIN_HEADERS).appendRow([
-        now, data.sessionId, data.school, data.student, data.loginAt
-      ].map(safe_));
-    } else if (data.type === "result") {
+    if (data.type === "result") {
       const unitScores = (data.units || []).map(function (u) {
         return u.score + "점 (" + u.correct + "/" + u.total + ")";
       });
       getSheet_(RESULT_SHEET, RESULT_HEADERS).appendRow([
-        now, data.sessionId, data.school, data.student, data.loginAt, data.completedAt,
+        now, data.sessionId, data.startedAt, data.completedAt,
         data.duration, data.durationSec,
         data.totalQuestions, data.answered, data.correct, data.totalScore
       ].concat(unitScores, [
@@ -98,7 +91,7 @@ function getSheet_(name, headers) {
   return sheet;
 }
 
-/** 학생이 입력한 글자가 수식(=, +, -, @)으로 실행되지 않도록 막기 */
+/** 받은 글자가 수식(=, +, -, @)으로 실행되지 않도록 막기 */
 function safe_(v) {
   return typeof v === "string" && /^[=+\-@]/.test(v) ? "'" + v : v;
 }

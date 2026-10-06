@@ -34,25 +34,8 @@
   <link rel="stylesheet" href="css/activities.css" />
 </head>
 <body>
-  <!-- ===== 로그인 화면 ===== -->
-  <section id="login-view" class="login-wrap">
-    <div class="login-card">
-      <div class="login-badge">중학교 2학년 수학</div>
-      <h1>도형의 닮음 &amp;<br />피타고라스 정리</h1>
-      <p class="login-sub">개념 학습 · 문제 풀이 · 학습 리포트</p>
-      <form id="login-form" autocomplete="off">
-        <label for="school">학교 이름</label>
-        <input id="school" name="school" type="text" placeholder="예) 한빛중학교" required maxlength="40" />
-        <label for="student">학번 (또는 이름)</label>
-        <input id="student" name="student" type="text" placeholder="예) 20315 또는 홍길동" required maxlength="40" />
-        <button type="submit" class="btn btn-primary btn-block">학습 시작하기</button>
-      </form>
-      <p class="login-note">※ 로그아웃하거나 새로고침하면 이전 학습 기록은 초기화되고 새 세션으로 시작합니다.</p>
-    </div>
-  </section>
-
   <!-- ===== 메인 앱 ===== -->
-  <div id="app-view" hidden>
+  <div id="app-view">
     <header class="topbar">
       <button class="brand" data-nav="home" type="button">
         <span class="brand-mark">∽</span>
@@ -75,8 +58,6 @@
             <span class="reward-num"><b id="stamp-count">0</b><small>개</small></span>
           </span>
         </button>
-        <span class="user-info" id="user-info"></span>
-        <button type="button" class="btn btn-ghost" id="logout-btn">로그아웃</button>
       </div>
     </header>
 
